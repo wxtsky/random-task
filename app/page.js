@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { InputNumber, Button, Table, Row, Col, Card, Select, Tag, Form, Checkbox, BackTop, Input } from 'antd';
+import { InputNumber, Button, Table, Row, Col, Card, Select, Tag, Form, Checkbox, BackTop, Input, message } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 
@@ -10,8 +10,10 @@ const App = () => {
   const [form] = Form.useForm();
   const [numAccounts, setNumAccounts] = useState(2);
   const [numTasks, setNumTasks] = useState(1);
+  const [taskNames, setTaskNames] = useState([]);
   const [numDays, setNumDays] = useState(2);
   const [randomTasks, setRandomTasks] = useState(true);
+  const [customTaskNames, setCustomTaskNames] = useState(false);
   const [assignments, setAssignments] = useState([]);
   const [filteredAssignments, setFilteredAssignments] = useState([]);
   const [filters, setFilters] = useState({
@@ -29,12 +31,32 @@ const App = () => {
     setFilteredAssignments(filtered);
   }, [assignments, filters]);
 
+  useEffect(() => {
+    setTaskNames(Array(numTasks).fill(''));
+  }, [numTasks]);
+
   const assignTasks = () => {
     if (numAccounts <= 1 || numTasks <= 1 || numDays <= 1 || numDays > numAccounts) {
       return;
     }
 
-    const tasksArray = Array.from({ length: numTasks }, (_, i) => String.fromCharCode(65 + i));
+    if (customTaskNames) {
+      if (taskNames.some((name) => name.trim() === '')) {
+        message.error('请填写所有任务名称');
+        return;
+      }
+
+      const uniqueTaskNames = [...new Set(taskNames)];
+      if (uniqueTaskNames.length !== taskNames.length) {
+        message.error('任务名称不能重复');
+        return;
+      }
+    }
+
+    const tasksArray = customTaskNames
+        ? taskNames.filter((name) => name.trim() !== '')
+        : Array.from({ length: numTasks }, (_, i) => String.fromCharCode(65 + i));
+
     const accountsArray = Array.from({ length: numAccounts }, (_, i) => i + 1);
     const shuffledAccounts = shuffle(accountsArray);
 
@@ -52,12 +74,17 @@ const App = () => {
         const account = shuffledAccounts[accountIndex];
         const tasks = randomTasks ? shuffle(tasksArray) : tasksArray;
 
-        assignmentsArray.push({
+        const assignmentObject = {
           key: `${day}-${account}`,
           day,
           account,
-          tasks: tasks.join(''),
+        };
+
+        tasks.forEach((task, index) => {
+          assignmentObject[`任务${index + 1}`] = task;
         });
+
+        assignmentsArray.push(assignmentObject);
 
         accountIndex++;
       }
@@ -88,9 +115,15 @@ const App = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Assignments');
     if (fileName === '') {
       XLSX.writeFile(workbook, 'assignments.xlsx');
-    }else {
-        XLSX.writeFile(workbook, `${fileName}.xlsx`);
+    } else {
+      XLSX.writeFile(workbook, `${fileName}.xlsx`);
     }
+  };
+
+  const handleTaskNameChange = (index, value) => {
+    const newTaskNames = [...taskNames];
+    newTaskNames[index] = value;
+    setTaskNames(newTaskNames);
   };
 
   const columns = [
@@ -98,7 +131,7 @@ const App = () => {
       title: '天数',
       dataIndex: 'day',
       key: 'day',
-      width: '20%',
+      width: '10%',
       sorter: (a, b) => a.day - b.day,
       render: (day) => {
         const hue = (day * 137.508) % 360;
@@ -110,16 +143,16 @@ const App = () => {
       title: '账号',
       dataIndex: 'account',
       key: 'account',
-      width: '20%',
+      width: '10%',
       render: (account) => <Tag color="green">账号 {account}</Tag>,
     },
-    {
-      title: '任务顺序',
-      dataIndex: 'tasks',
-      key: 'tasks',
-      width: '60%',
-      render: (tasks) => tasks.split('').map((task, index) => <Tag key={index}>{task}</Tag>),
-    },
+    ...Array.from({ length: numTasks }, (_, i) => ({
+      title: `任务${i + 1}`,
+      dataIndex: `任务${i + 1}`,
+      key: `任务${i + 1}`,
+      width: `${80 / numTasks}%`,
+      render: (task) => task && <Tag>{task}</Tag>,
+    })),
   ];
 
   return (
@@ -129,7 +162,7 @@ const App = () => {
           <Card title="随机任务分配" bordered={false}>
             <Form form={form} layout="vertical">
               <Row gutter={16}>
-                <Col span={8}>
+                <Col span={24}>
                   <Form.Item label="账号数量">
                     <InputNumber
                         min={2}
@@ -140,7 +173,9 @@ const App = () => {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
                   <Form.Item label="任务数量">
                     <InputNumber
                         min={1}
@@ -151,7 +186,7 @@ const App = () => {
                     />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col span={12}>
                   <Form.Item label="完成天数">
                     <InputNumber
                         min={2}
@@ -168,14 +203,38 @@ const App = () => {
                 <Col span={12}>
                   <Form.Item>
                     <Checkbox
-                        checked={randomTasks}
-                        onChange={(e) => setRandomTasks(e.target.checked)}
+                        checked={customTaskNames}
+                        onChange={(e) => setCustomTaskNames(e.target.checked)}
                     >
-                      随机任务顺序
+                      自定义任务名称
                     </Checkbox>
                   </Form.Item>
                 </Col>
                 <Col span={12}>
+                  <Form.Item>
+                    <Checkbox checked={randomTasks} onChange={(e) => setRandomTasks(e.target.checked)}>
+                      随机任务顺序
+                    </Checkbox>
+                  </Form.Item>
+                </Col>
+              </Row>
+              {customTaskNames && (
+                  <Row gutter={16}>
+                    {taskNames.map((taskName, index) => (
+                        <Col span={8} key={index}>
+                          <Form.Item label={`任务${index + 1}`}>
+                            <Input
+                                value={taskName}
+                                onChange={(e) => handleTaskNameChange(index, e.target.value)}
+                                style={{ width: '100%' }}
+                            />
+                          </Form.Item>
+                        </Col>
+                    ))}
+                  </Row>
+              )}
+              <Row gutter={16}>
+                <Col span={24}>
                   <Form.Item>
                     <Button type="primary" onClick={assignTasks} style={{ width: '100%' }}>
                       分配任务
@@ -230,10 +289,11 @@ const App = () => {
               </Button>
             </Row>
             <Table
-                size={'small'}
+                size="small"
                 columns={columns}
                 dataSource={filteredAssignments}
                 pagination={false}
+                scroll={{ x: 'max-content' }}
             />
           </Card>
         </Col>

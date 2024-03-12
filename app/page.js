@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { InputNumber, Button, Table, Row, Col, Card, Select, Tag, Form, Checkbox, BackTop } from 'antd';
+import { InputNumber, Button, Table, Row, Col, Card, Select, Tag, Form, Checkbox, BackTop, Input } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 
@@ -8,9 +8,9 @@ const { Option } = Select;
 
 const App = () => {
   const [form] = Form.useForm();
-  const [numAccounts, setNumAccounts] = useState(0);
-  const [numTasks, setNumTasks] = useState(0);
-  const [numDays, setNumDays] = useState(0);
+  const [numAccounts, setNumAccounts] = useState(2);
+  const [numTasks, setNumTasks] = useState(1);
+  const [numDays, setNumDays] = useState(2);
   const [randomTasks, setRandomTasks] = useState(true);
   const [assignments, setAssignments] = useState([]);
   const [filteredAssignments, setFilteredAssignments] = useState([]);
@@ -18,6 +18,7 @@ const App = () => {
     day: 'all',
     account: 'all',
   });
+  const [fileName, setFileName] = useState('');
 
   useEffect(() => {
     const filtered = assignments.filter((item) => {
@@ -35,23 +36,31 @@ const App = () => {
 
     const tasksArray = Array.from({ length: numTasks }, (_, i) => String.fromCharCode(65 + i));
     const accountsArray = Array.from({ length: numAccounts }, (_, i) => i + 1);
+    const shuffledAccounts = shuffle(accountsArray);
 
     const assignmentsArray = [];
 
-    for (let day = 1; day <= numDays; day++) {
-      const shuffledAccounts = shuffle(accountsArray);
-      const accountsPerDay = Math.ceil(numAccounts / numDays);
-      const selectedAccounts = shuffledAccounts.slice(0, accountsPerDay);
+    const accountsPerDay = Math.floor(numAccounts / numDays);
+    const extraAccounts = numAccounts % numDays;
 
-      selectedAccounts.forEach((account) => {
+    let accountIndex = 0;
+
+    for (let day = 1; day <= numDays; day++) {
+      const numAccountsForDay = accountsPerDay + (day <= extraAccounts ? 1 : 0);
+
+      for (let i = 0; i < numAccountsForDay; i++) {
+        const account = shuffledAccounts[accountIndex];
         const tasks = randomTasks ? shuffle(tasksArray) : tasksArray;
+
         assignmentsArray.push({
           key: `${day}-${account}`,
           day,
           account,
           tasks: tasks.join(''),
         });
-      });
+
+        accountIndex++;
+      }
     }
 
     setAssignments(assignmentsArray);
@@ -77,7 +86,11 @@ const App = () => {
     const worksheet = XLSX.utils.json_to_sheet(filteredAssignments);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Assignments');
-    XLSX.writeFile(workbook, 'assignments.xlsx');
+    if (fileName === '') {
+      XLSX.writeFile(workbook, 'assignments.xlsx');
+    }else {
+        XLSX.writeFile(workbook, `${fileName}.xlsx`);
+    }
   };
 
   const columns = [
@@ -88,8 +101,8 @@ const App = () => {
       width: '20%',
       sorter: (a, b) => a.day - b.day,
       render: (day) => {
-        const hue = (day * 137.508) % 360; // 根据天数计算色相值
-        const color = `hsl(${hue}, 50%, 50%)`; // 使用色相值生成 HSL 颜色
+        const hue = (day * 137.508) % 360;
+        const color = `hsl(${hue}, 50%, 50%)`;
         return <Tag color={color}>{day}</Tag>;
       },
     },
@@ -114,48 +127,65 @@ const App = () => {
         <BackTop />
         <Col xs={24} sm={22} md={20} lg={18} xl={16}>
           <Card title="随机任务分配" bordered={false}>
-            <Form form={form} layout="inline" style={{ marginBottom: 16 }}>
-              <Form.Item label="账号数量">
-                <InputNumber
-                    min={2}
-                    placeholder="请输入账号数量"
-                    value={numAccounts}
-                    onChange={setNumAccounts}
-                />
-              </Form.Item>
-              <Form.Item label="任务数量">
-                <InputNumber
-                    min={2}
-                    placeholder="请输入任务数量"
-                    value={numTasks}
-                    onChange={setNumTasks}
-                />
-              </Form.Item>
-              <Form.Item label="完成天数">
-                <InputNumber
-                    min={2}
-                    max={numAccounts}
-                    placeholder="请输入完成天数"
-                    value={numDays}
-                    onChange={setNumDays}
-                />
-              </Form.Item>
-              <Form.Item>
-                <Checkbox
-                    checked={randomTasks}
-                    onChange={(e) => setRandomTasks(e.target.checked)}
-                >
-                  随机任务顺序
-                </Checkbox>
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" onClick={assignTasks}>
-                  分配任务
-                </Button>
-              </Form.Item>
+            <Form form={form} layout="vertical">
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item label="账号数量">
+                    <InputNumber
+                        min={2}
+                        placeholder="请输入账号数量"
+                        value={numAccounts}
+                        onChange={setNumAccounts}
+                        style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="任务数量">
+                    <InputNumber
+                        min={1}
+                        placeholder="请输入任务数量"
+                        value={numTasks}
+                        onChange={setNumTasks}
+                        style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="完成天数">
+                    <InputNumber
+                        min={2}
+                        max={numAccounts}
+                        placeholder="请输入完成天数"
+                        value={numDays}
+                        onChange={setNumDays}
+                        style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item>
+                    <Checkbox
+                        checked={randomTasks}
+                        onChange={(e) => setRandomTasks(e.target.checked)}
+                    >
+                      随机任务顺序
+                    </Checkbox>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item>
+                    <Button type="primary" onClick={assignTasks} style={{ width: '100%' }}>
+                      分配任务
+                    </Button>
+                  </Form.Item>
+                </Col>
+              </Row>
             </Form>
             <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={12}>
+              <Col span={8}>
                 <Select
                     value={filters.day}
                     style={{ width: '100%' }}
@@ -169,7 +199,7 @@ const App = () => {
                   ))}
                 </Select>
               </Col>
-              <Col span={12}>
+              <Col span={8}>
                 <Select
                     value={filters.account}
                     style={{ width: '100%' }}
@@ -184,6 +214,14 @@ const App = () => {
                           </Option>
                       ))}
                 </Select>
+              </Col>
+              <Col span={8}>
+                <Input
+                    placeholder="请输入文件名"
+                    value={fileName}
+                    onChange={(e) => setFileName(e.target.value)}
+                    style={{ width: '100%' }}
+                />
               </Col>
             </Row>
             <Row justify="end" style={{ marginBottom: 16 }}>
